@@ -344,7 +344,7 @@ reduceUpdate msg model =
             case Machine.labelledTransition (Tuple.first model.current) of
                 Just new ->
                     Reducing { model | current = new
-                             , previous = model.current :: model.previous
+                             , previous = [] -- model.current :: model.previous
                              }
                 Nothing ->
                     Reducing model

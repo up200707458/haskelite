@@ -1,0 +1,165 @@
+#+title: Documenting exploration and modifications
+
+* Compilation and Running
+There were no instructions given on how to do this but it turned out to be pretty simple.
+
+- Install elm
+  #+begin_src shell
+  pakku -S elm-platform-bin
+  #+end_src
+
+To edit code and try new build i created a new =site/blank.html= (a copy of =site/index.html=) with:
+- links to examples removed
+- reference to =site/js/haskelite-min.js= (which is the sole container for the whole of =haskelite=)
+  changed to the one i compiled. (Didn't care about =minifying= the code)
+#+begin_example html
+    <!-- <script type='text/javascript' src='js/haskelite-min.js'></script> -->
+    <script type='text/javascript' src='js/haskelite.js'></script>
+#+end_example
+
+- [[https://guide.elm-lang.org/install/elm#elm-make][Compilation]]
+  #+begin_src shell
+  elm make src/Haskelite.elm --optimize --output=site/js/haskelite.js # cannot use optimize when code has "Debug.log"
+  elm make src/Haskelite.elm --output=site/js/haskelite.js
+  #+end_src
+
+- [[https://riptutorial.com/elm/topic/2845/debugging][Debugging]] : printing to browser's console certain values
+  #+begin_src elm
+-- prints to console accompanying the "text" so you can id which value that print belong to
+Debug.log "text" value
+  #+end_src
+
+* Git
+#+begin_src shell
+git branch
+#+end_src
+
+#+RESULTS:
+: * dev-step-printing-reflects-memoization
+:   main
+:   step-printing-reflects-memoization
+
+The ~step-printing-reflects-memoization~ is meant to be clean with only modifications required to run.
+The ~dev~ version has this document and the addition of:
+- ~Debug.log~ control, stack and heap when printing a step
+- To reduce noise on browser's console
+  - Disabled previous lines (since they are printed again)
+  - Disabled prelude to make heap smaller
+    - added just ~zipWith~ and ~tail~ to be able to do =fib= example
+
+* Miscellaneous poking around
+- Knowing how to update heap, naturally in the machine transitions
+  [[file:src/Machine.elm::-- update a variable]]
+
+- Continuations, Stack, Control
+  [[file:src/Machine/Types.elm::type Cont]]
+
+- Storing of history reduction steps
+  [[file:src/Haskelite.elm::, previous = \[\] -- model.current :: model.previous]]
+
+  #+begin_src elm
+  type Model
+      = Editing EditModel            -- while editing
+      | Reducing ReduceModel         -- while doing evaluations
+      | Panic String                 -- when initialization failed
+
+  type alias ReduceModel
+      = { current : Step             -- current configuration
+        , previous : List Step       -- list of previous steps
+        , flags : Flags              -- saved inputs (to go back to editing)
+        , options : Options          -- displaying options
+        }
+  #+end_src
+
+- Prelude heap manipulation
+  - Ignoring prelude entirely
+    [[file:src/Haskelite.elm::heap0 = Heap.fromBinds (model.prelude ++ mod.binds)]]
+    just make it ~[]~ or keep the ~mod.binds~
+    (didn't understand this since the heap would still have stuff when assigning ~[]~)
+
+  - Having only ~zipWith~
+    [[file:src/Prelude.elm::preludeText : String]]
+
+- In =PrettyPrinter=
+  #+begin_example
+prettyConfStep ↦ ppConfStep ↦ ppConf
+#+end_example
+
+** ~ppConf~ early manipulation
+This made the acted upon expression to always show 42.
+Since this expression comes from ~control~ this must mean it's where reduction happens.
+#+begin_src elm
+-- pretty print a configuration
+ppConf : Options -> Conf -> Maybe (Doc Tag)
+ppConf opts (heap, control, stack)
+    = case (getExpr control) of
+         Just expr ->
+             let ppCtx = makeCtx opts heap
+             in
+             case unwindStack stack (Number 42) of -- expr of
+                 ([], expr1) ->
+                     Just (ppExpr ppCtx expr1)
+                 (stk,expr1) ->
+                     let ellipsis = String.repeat (List.length stk) "."
+                     in Just (taggedString ellipsis Linenumber
+                             |> a space
+                             |> a (align (ppExpr ppCtx expr1)))
+         _ ->
+             Nothing
+#+end_src
+
+** example heap
+#+begin_src haskell
+sqr x = x * x
+#+end_src
+
+And evaluating ~sqr (4+2)~.
+:full-heap:
+#+begin_src elm
+Heap := : { bounds = 0, indirections = 2, store = Dict.fromList
+
+            [
+             ("$0",BinaryOp "+" (Number 4) (Number 2))
+            ,("$1",Var "$0")
+            ,("*",Lam 2 (Just "*") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "*" (Var "x") (Var "y")) Nothing))))
+            ,("+",Lam 2 (Just "+") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "+" (Var "x") (Var "y")) Nothing))))
+            ,("-",Lam 2 (Just "-") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "-" (Var "x") (Var "y")) Nothing))))
+            ,(":",Lam 2 (Just ":") (Match (VarP "x") (Match (VarP "y") (Return (Cons True ":" [Var "x",Var "y"]) Nothing))))
+            ,("<",Lam 2 (Just "<") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "<" (Var "x") (Var "y")) Nothing))))
+            ,("<=",Lam 2 (Just "<=") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "<=" (Var "x") (Var "y")) Nothing))))
+            ,(">",Lam 2 (Just ">") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp ">" (Var "x") (Var "y")) Nothing))))
+            ,(">=",Lam 2 (Just ">=") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp ">=" (Var "x") (Var "y")) Nothing))))
+            ,("chr",Lam 1 (Just "chr") (Match (VarP "x") (Return (UnaryOp "chr" (Var "x")) Nothing)))
+            ,("compare",Lam 2 (Just "compare") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "compare" (Var "x") (Var "y")) Nothing))))
+            ,("div",Lam 2 (Just "div") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "div" (Var "x") (Var "y")) Nothing))))
+            ,("error",Lam 1 (Just "error") (Match (VarP "x") (Return (UnaryOp "error" (Var "x")) Nothing)))
+            ,("isAlpha",Lam 1 (Just "isAlpha") (Match (VarP "x") (Return (UnaryOp "isAlpha" (Var "x")) Nothing)))
+            ,("isAlphaNum",Lam 1 (Just "isAlphaNum") (Match (VarP "x") (Return (UnaryOp "isAlphaNum" (Var "x")) Nothing)))
+            ,("isDigit",Lam 1 (Just "isDigit") (Match (VarP "x") (Return (UnaryOp "isDigit" (Var "x")) Nothing)))
+            ,("isLower",Lam 1 (Just "isLower") (Match (VarP "x") (Return (UnaryOp "isLower" (Var "x")) Nothing)))
+            ,("isUpper",Lam 1 (Just "isUpper") (Match (VarP "x") (Return (UnaryOp "isUpper" (Var "x")) Nothing)))
+            ,("mod",Lam 2 (Just "mod") (Match (VarP "x") (Match (VarP "y") (Return (BinaryOp "mod" (Var "x") (Var "y")) Nothing))))
+            ,("negate",Lam 1 (Just "negate") (Match (VarP "x") (Return (UnaryOp "negate" (Var "x")) Nothing)))
+            ,("ord",Lam 1 (Just "ord") (Match (VarP "x") (Return (UnaryOp "ord" (Var "x")) Nothing)))
+            ,("show",Lam 1 (Just "show") (Match (VarP "x") (Return (UnaryOp "show" (Var "x")) Nothing)))
+            ,("sqr",Lam 1 (Just "sqr") (Match (VarP "x") (Return (BinaryOp "*" (Var "x") (Var "x")) (Just "sqr x = x *  x"))))
+            ,("toLower",Lam 1 (Just "toLower") (Match (VarP "x") (Return (UnaryOp "toLower" (Var "x")) Nothing)))
+            ,
+             ("toUpper",Lam 1 (Just "toUpper") (Match (VarP "x") (Return (UnaryOp "toUpper" (Var "x")) Nothing)))] }
+#+end_src
+:end:
+
+Selecting only the relevant parts:
+#+begin_src elm
+Heap := : { bounds = 0, indirections = 2, store = Dict.fromList
+
+            [
+             ("$0",BinaryOp "+" (Number 4) (Number 2))
+            ,("$1",Var "$0")
+            ...
+            -- (name, Expr@(Lam Int (Maybe Name) Matching@(Return Expr (Maybe Info))))
+            ("sqr"
+            , Lam 1 (Just "sqr") (Match (VarP "x")
+                 (Return (BinaryOp "*" (Var "x") (Var "x")) (Just "sqr x = x *  x")))),
+            ...
+#+end_src

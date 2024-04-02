@@ -117,14 +117,14 @@ ppConfStep opts conf step
 -- pretty print a configuration
 ppConf : Options -> Conf -> Maybe (Doc Tag)
 ppConf opts (heap, control, stack)
-    = case (getExpr control) of
+    = case (getExpr (Debug.log "Control := " control)) of
          Just expr ->
-             case unwindStack heap expr stack expr of
+             case unwindStack heap expr (Debug.log "Stack :=" stack) expr of
                  (heap1, [], expr1) ->
-                     let ppCtx = makeCtx opts heap1
+                     let ppCtx = makeCtx opts (Debug.log "Heap := " heap1)
                      in Just (ppExpr ppCtx expr1)
                  (heap1, stk, expr1) ->
-                     let ppCtx = makeCtx opts heap1
+                     let ppCtx = makeCtx opts (Debug.log "Heap := " heap1)
                          ellipsis = String.repeat (List.length stk) "."
                      in Just (taggedString ellipsis Linenumber
                              |> a space
