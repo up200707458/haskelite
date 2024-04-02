@@ -16518,7 +16518,10 @@ var $author$project$Haskelite$reduceUpdate = F2(
 					return $author$project$Haskelite$Reducing(
 						_Utils_update(
 							model,
-							{current: _new, previous: _List_Nil}));
+							{
+								current: _new,
+								previous: A2($elm$core$List$cons, model.current, model.previous)
+							}));
 				} else {
 					return $author$project$Haskelite$Reducing(model);
 				}

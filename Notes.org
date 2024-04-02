@@ -1,6 +1,12 @@
 #+title: Documenting exploration and modifications
 
-* Compilation and Running
+* Running instructions
+To explore the control, stack, heap in the browser's console use the commit ~a293c9d~ which just removes previous lines history which reprints their respective heaps and so clutters console.
+
+Running is achieved by opening in a browser:
+[[file:site/blank.html]]
+
+* Installation, Compilation and local execution
 There were no instructions given on how to do this but it turned out to be pretty simple.
 
 - Install elm
